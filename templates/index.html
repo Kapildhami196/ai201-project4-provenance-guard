@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+  <title>Provenance Guard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #101827;
+      color: #eef2ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, #243b6b 0, transparent 32rem),
+        #101827;
+    }
+
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 64px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      color: #cbd5e1;
+      line-height: 1.6;
+      max-width: 760px;
+    }
+
+    .notice {
+      margin: 24px 0;
+      padding: 14px 16px;
+      border-left: 4px solid #fbbf24;
+      border-radius: 8px;
+      background: rgba(251, 191, 36, 0.12);
+      color: #fef3c7;
+      line-height: 1.5;
+    }
+
+    .card {
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.88);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+    }
+
+    label {
+      display: block;
+      margin: 18px 0 8px;
+      font-weight: 700;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #475569;
+      border-radius: 10px;
+      padding: 12px;
+      font: inherit;
+      color: #f8fafc;
+      background: #0f172a;
+    }
+
+    textarea {
+      min-height: 190px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    button {
+      margin-top: 20px;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      color: #07121f;
+      background: #67e8f9;
+    }
+
+    button:hover {
+      background: #a5f3fc;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .error {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 10px;
+      background: #7f1d1d;
+      color: #fee2e2;
+      line-height: 1.5;
+    }
+
+    .result-title {
+      margin-bottom: 8px;
+      font-size: 1.45rem;
+    }
+
+    .likely-ai {
+      color: #fca5a5;
+    }
+
+    .likely-human {
+      color: #86efac;
+    }
+
+    .uncertain {
+      color: #fde68a;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .metric {
+      padding: 14px;
+      border-radius: 10px;
+      background: #172033;
+    }
+
+    .metric span {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.25rem;
+    }
+
+    .signal {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 10px;
+      background: #172033;
+      line-height: 1.5;
+    }
+
+    .signal h3 {
+      margin: 0 0 8px;
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .links a {
+      color: #a5f3fc;
+    }
+
+    .small-text {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Provenance Guard</h1>
+
+    <p class="subtitle">
+      A cautious two-signal prototype that helps explain whether submitted text
+      appears more AI-like, more human-like, or uncertain.
+    </p>
+
+    <div class="notice">
+      This tool is not proof of authorship. It combines one Groq assessment
+      with one local writing-pattern assessment, then gives the creator a way
+      to appeal the result.
+    </div>
+
+    <section class="card">
+      <h2>Analyze content</h2>
+
+      <form id="submission-form">
+        <label for="creator-id">Creator ID</label>
+        <input
+          id="creator-id"
+          name="creator_id"
+          placeholder="Example: kapil-demo"
+          required
+        >
+
+        <label for="content-text">Text to analyze</label>
+        <textarea
+          id="content-text"
+          name="text"
+          placeholder="Paste at least 40 characters of text here..."
+          required
+        ></textarea>
+
+        <button id="submit-button" type="submit">
+          Analyze Content
+        </button>
+      </form>
+
+      <div id="submit-error" class="error hidden"></div>
+    </section>
+
+    <section id="result-card" class="card hidden">
+      <h2 id="result-title" class="result-title"></h2>
+      <p id="result-message"></p>
+
+      <div class="metrics">
+        <div class="metric">
+          <span>AI probability</span>
+          <strong id="ai-probability"></strong>
+        </div>
+
+        <div class="metric">
+          <span>Confidence</span>
+          <strong id="confidence"></strong>
+        </div>
+
+        <div class="metric">
+          <span>Signal agreement</span>
+          <strong id="signal-agreement"></strong>
+        </div>
+      </div>
+
+      <div class="signal">
+        <h3>Groq signal</h3>
+        <p id="llm-details"></p>
+      </div>
+
+      <div class="signal">
+        <h3>Local stylometric signal</h3>
+        <p id="stylometric-details"></p>
+      </div>
+    </section>
+
+    <section id="appeal-card" class="card hidden">
+      <h2>Appeal this result</h2>
+
+      <p class="small-text">
+        Explain why you disagree. Your appeal will preserve the original result
+        and move the item into the human review queue.
+      </p>
+
+      <form id="appeal-form">
+        <label for="appeal-reasoning">Your reasoning</label>
+        <textarea
+          id="appeal-reasoning"
+          placeholder="Explain why you disagree with the automated result..."
+          required
+        ></textarea>
+
+        <button id="appeal-button" type="submit">
+          Submit Appeal
+        </button>
+      </form>
+
+      <div id="appeal-message" class="hidden"></div>
+    </section>
+
+    <section class="card">
+      <h2>Demo data</h2>
+
+      <p class="small-text">
+        These links show the structured audit events and the current review
+        queue used during the demo.
+      </p>
+
+      <div class="links">
+        <a href="/health" target="_blank">Health check</a>
+        <a href="/log" target="_blank">Audit log</a>
+        <a href="/review-queue" target="_blank">Review queue</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const submissionForm = document.getElementById("submission-form");
+    const appealForm = document.getElementById("appeal-form");
+    const submitButton = document.getElementById("submit-button");
+    const appealButton = document.getElementById("appeal-button");
+    const submitError = document.getElementById("submit-error");
+    const resultCard = document.getElementById("result-card");
+    const appealCard = document.getElementById("appeal-card");
+    const appealMessage = document.getElementById("appeal-message");
+
+    let latestContentId = null;
+    let latestCreatorId = null;
+
+    function formatPercent(value) {
+      return `${Math.round(value * 100)}%`;
+    }
+
+    function showError(message) {
+      submitError.textContent = message;
+      submitError.classList.remove("hidden");
+    }
+
+    function clearError() {
+      submitError.textContent = "";
+      submitError.classList.add("hidden");
+    }
+
+    function resultClass(variant) {
+      if (variant === "likely_ai") {
+        return "likely-ai";
+      }
+
+      if (variant === "likely_human") {
+        return "likely-human";
+      }
+
+      return "uncertain";
+    }
+
+    submissionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearError();
+
+      const creatorId = document.getElementById("creator-id").value.trim();
+      const text = document.getElementById("content-text").value.trim();
+
+      submitButton.disabled = true;
+      submitButton.textContent = "Analyzing...";
+
+      try {
+        const response = await fetch("/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            creator_id: creatorId,
+            text,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Unable to analyze this text.");
+        }
+
+        latestContentId = result.content_id;
+        latestCreatorId = result.creator_id;
+
+        const title = document.getElementById("result-title");
+        title.textContent = result.label.title;
+        title.className = `result-title ${resultClass(result.label.variant)}`;
+
+        document.getElementById("result-message").textContent =
+          result.label.message;
+
+        document.getElementById("ai-probability").textContent =
+          formatPercent(result.ai_probability);
+
+        document.getElementById("confidence").textContent =
+          formatPercent(result.confidence);
+
+        document.getElementById("signal-agreement").textContent =
+          formatPercent(result.signal_agreement);
+
+        document.getElementById("llm-details").textContent =
+          `Score: ${formatPercent(result.signals.llm.score)}. ` +
+          `${result.signals.llm.reasoning}`;
+
+        document.getElementById("stylometric-details").textContent =
+          `Score: ${formatPercent(result.signals.stylometric.score)}. ` +
+          `${result.signals.stylometric.reasoning}`;
+
+        resultCard.classList.remove("hidden");
+        appealCard.classList.remove("hidden");
+        appealMessage.classList.add("hidden");
+        appealMessage.textContent = "";
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Analyze Content";
+      }
+    });
+
+    appealForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const creatorReasoning =
+        document.getElementById("appeal-reasoning").value.trim();
+
+      appealButton.disabled = true;
+      appealButton.textContent = "Submitting appeal...";
+
+      try {
+        const response = await fetch("/appeal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content_id: latestContentId,
+            creator_id: latestCreatorId,
+            creator_reasoning: creatorReasoning,
+          }),
+        });
+
+        const result = await response.json();
+
+        appealMessage.classList.remove("hidden");
+
+        if (!response.ok) {
+          appealMessage.className = "error";
+          appealMessage.textContent =
+            result.error || "Unable to submit the appeal.";
+          return;
+        }
+
+        appealMessage.className = "notice";
+        appealMessage.textContent = result.message;
+        appealButton.disabled = true;
+        appealButton.textContent = "Appeal Submitted";
+      } catch (error) {
+        appealMessage.className = "error";
+        appealMessage.classList.remove("hidden");
+        appealMessage.textContent = error.message;
+      } finally {
+        if (!appealButton.disabled) {
+          appealButton.textContent = "Submit Appeal";
+        }
+      }
+    });
+  </script>
+</body>
+</html>
